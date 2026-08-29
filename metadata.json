@@ -1,0 +1,6 @@
+{
+  "name": "Operava Desk",
+  "description": "Enterprise Operava Desk Portal with omnichannel Zoho Desk-style ticketing, AUX agent management, CRM annotations, scheduled email blasting, billing, and internal audit logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    /* Google Blue M3 Seed Defaults */
+    --m3-primary: #0b57d0;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: #d3e3fd;
+    --m3-on-primary-container: #041e49;
+
+    --m3-secondary: #00639b;
+    --m3-on-secondary: #ffffff;
+    --m3-secondary-container: #c2e7ff;
+    --m3-on-secondary-container: #001d33;
+
+    --m3-tertiary: #146c2e;
+    --m3-on-tertiary: #ffffff;
+    --m3-tertiary-container: #c4eed0;
+    --m3-on-tertiary-container: #00210b;
+
+    --m3-surface: #f8f9fa;
+    --m3-on-surface: #1f1f1f;
+    --m3-surface-variant: #e1e3e1;
+    --m3-on-surface-variant: #444746;
+
+    --m3-surface-container-lowest: #ffffff;
+    --m3-surface-container-low: #f3f4f6;
+    --m3-surface-container: #eaebee;
+    --m3-surface-container-high: #e2e3e7;
+    --m3-surface-container-highest: #d9dbdf;
+
+    --m3-outline: #747775;
+    --m3-outline-variant: #c4c7c5;
+
+    --m3-error: #ba1a1a;
+    --m3-on-error: #ffffff;
+    --m3-error-container: #ffdad6;
+    --m3-on-error-container: #410002;
+
+    --m3-success: #146c2e;
+    --m3-on-success: #ffffff;
+    --m3-success-container: #c4eed0;
+    --m3-on-success-container: #00210b;
+
+    --m3-warning: #9e4200;
+    --m3-on-warning: #ffffff;
+    --m3-warning-container: #ffdbc9;
+    --m3-on-warning-container: #351000;
+  }
+}
+
+/* Custom scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--m3-outline-variant);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--m3-outline);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

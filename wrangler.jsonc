@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "operava-desk",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Server-side secrets (set with `wrangler secret put GEMINI_API_KEY`, or in the
+  // Cloudflare Dashboard under Workers & Pages > Settings > Variables for production).
+  // Do not commit real values here — use `.dev.vars` (gitignored) for local `wrangler dev`.
+  "vars": {
+    "GEMINI_API_KEY": ""
+  }
+
+  // Optional bindings for future persistence needs (CRM leads, invoices, tickets, etc.)
+  // currently stored client-side via localStorage in lib/offline-storage.ts.
+  // Uncomment and configure as the backend grows:
+  //
+  // "kv_namespaces": [
+  //   { "binding": "PORTAL_KV", "id": "<kv-namespace-id>" }
+  // ],
+  // "d1_databases": [
+  //   { "binding": "PORTAL_DB", "database_name": "operava-desk", "database_id": "<d1-database-id>" }
+  // ],
+  // "r2_buckets": [
+  //   { "binding": "PORTAL_FILES", "bucket_name": "operava-desk-files" }
+  // ]
+}

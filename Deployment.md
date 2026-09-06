@@ -1,9 +1,12 @@
 # Operava Desk — Deployment & Production Architecture Guide
 
 ## Overview
+
 Operava Desk is an enterprise Google Workspace-style client portal built with **Next.js 15 App Router**, **TypeScript**, **Tailwind CSS v4**, **Material Design 3 (Material You)**, and **Progressive Web App (PWA)** offline caching. It features omnichannel ticketing, CRM, invoicing, email blasting, monthly notifications, contracts, files, calendar, analytics, security/audit logging, a knowledge base, and a server-side Gemini AI Assistant.
 
 **Current backend status**: All business data (projects, invoices, contracts, tickets, CRM leads, messages, campaigns, audit logs, etc.) is seeded from `lib/mock-data.ts` and persisted client-side via `localStorage` (`lib/offline-storage.ts`) — there is no external database yet. The **only server-side integration is the Gemini AI Assistant API route** (`app/api/gemini/generate/route.ts`). See [Backend & Data Persistence](#backend--data-persistence-status) for what is required to move this to a real production backend.
+
+**Target stack (OPERAVA WORKSPACE):** Cloudflare (site + Workers API/CDN) · Supabase (DB, Auth, Users, Tickets, Permissions, Realtime) · MEGA (large files/videos). Supabase and MEGA are **not implemented** in this repo yet. See the root [README.md](./README.md) for the architecture diagram and status table.
 
 ---
 
@@ -65,9 +68,9 @@ This build is **frontend-complete** for all 15 feature areas, but production use
 
 | Concern | Current State | Production Requirement |
 | --- | --- | --- |
-| CRM leads, invoices, contracts, tickets, campaigns, audit logs | Seeded from `lib/mock-data.ts`, mutated in React state, persisted to `localStorage` | Persist via a real database (e.g. Cloudflare D1/Postgres) behind authenticated API routes |
-| Authentication / authorization | None — the portal is open to any visitor of the deployed URL | Add an auth layer (e.g. session cookies + Cloudflare Access, or a provider like Auth.js) before exposing real client data |
-| File storage | Mocked file metadata only, no real uploads | Cloudflare R2 (or equivalent object storage) bound to the Worker |
+| CRM leads, invoices, contracts, tickets, campaigns, audit logs | Seeded from `lib/mock-data.ts`, mutated in React state, persisted to `localStorage` | Persist via Supabase (preferred for OPERAVA target) or Cloudflare D1 behind authenticated API routes |
+| Authentication / authorization | None — the portal is open to any visitor of the deployed URL | Supabase Auth + RLS (or session cookies + Cloudflare Access / Auth.js) |
+| File storage | Mocked file metadata only, no real uploads | MEGA for large files/videos (OPERAVA target) or Cloudflare R2 |
 | AI Assistant | Fully implemented, server-side, production-ready | Ensure `GEMINI_API_KEY` is set as a secret (never a public var) in every environment |
 
 Until real persistence and auth are added, treat this deployment as a **fully-featured demo/staging build**: safe to deploy publicly, but do not store real customer data in it.
@@ -89,16 +92,22 @@ npm run build   # next build (output: 'standalone')
 npm start       # next start
 ```
 
-### Cloudflare Workers Deployment (recommended)
+### Cloudflare Workers Deployment (recommended — not legacy Pages)
+
 This app deploys to **Cloudflare Workers** using the official [OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare) (`@opennextjs/cloudflare`), which supports the full Next.js 15 App Router feature set (Server Components, Route Handlers, etc.). The legacy `@cloudflare/next-on-pages` adapter is deprecated and is **not** used here.
 
+**Why Workers instead of Pages?** For full-stack Next.js (SSR + API routes), Cloudflare’s current guidance is Workers + static assets. Pages remains appropriate for purely static sites. DNS/CDN can still live on Cloudflare either way. See [README.md](./README.md).
+
 Configuration lives in:
-* **`wrangler.jsonc`** — Worker name, compatibility date/flags, static asset binding, and commented-out examples for optional KV/D1/R2 bindings.
+* **`wrangler.jsonc`** — Worker name (`operava-desk`), compatibility date/flags, static asset binding, and commented-out examples for optional KV/D1/R2 bindings.
 * **`open-next.config.ts`** — OpenNext build configuration (default Cloudflare preset).
 
 ```bash
 # One-time: authenticate wrangler with your Cloudflare account
 npx wrangler login
+
+# Set production secret
+npx wrangler secret put GEMINI_API_KEY
 
 # Build the Next.js app into a Cloudflare Worker bundle
 npm run cf:build
@@ -116,8 +125,8 @@ npm run cf:deploy
 | `GEMINI_API_KEY` | Secret var | **Yes** | Server-side Gemini AI Assistant calls. Set with `wrangler secret put GEMINI_API_KEY` for production, or in `.dev.vars` (gitignored) for local `wrangler dev`/preview. |
 | `ASSETS` | Assets binding | Yes (auto-configured) | Serves static assets (`/_next/static`, images, `sw.js`) from `.open-next/assets`. |
 | `PORTAL_KV` | KV namespace | No (future) | Key-value cache/session storage, once server-side sessions are added. |
-| `PORTAL_DB` | D1 database | No (future) | Relational persistence for CRM/invoices/tickets/etc., replacing the current mock/localStorage layer. |
-| `PORTAL_FILES` | R2 bucket | No (future) | Real file uploads for the File Manager view. |
+| `PORTAL_DB` | D1 database | No (future) | Relational persistence for CRM/invoices/tickets/etc., if not using Supabase. |
+| `PORTAL_FILES` | R2 bucket | No (future) | Real file uploads if not using MEGA. |
 
 Uncomment the relevant sections of `wrangler.jsonc` and provision the resources (`wrangler kv namespace create ...`, `wrangler d1 create ...`, `wrangler r2 bucket create ...`) once server-side persistence is implemented.
 
@@ -141,7 +150,21 @@ For Cloudflare deployments, set the same key as a Worker secret (`wrangler secre
 ---
 
 ## GitHub Actions CI/CD
-Automate `npm run build` and `npm run lint` validation on every Pull Request to guarantee a type-safe, lint-clean build before merge. To auto-deploy on merge to `main`, add a workflow step running `npm run cf:deploy` with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` configured as repository secrets.
+
+Workflow: `.github/workflows/deploy-cloudflare.yml`
+
+- Runs on push to `main` and `workflow_dispatch`
+- Builds with OpenNext, deploys with `cloudflare/wrangler-action`
+
+Repository secrets:
+
+| Secret | Required |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Yes (Workers Edit + Account Read) |
+| `CLOUDFLARE_ACCOUNT_ID` | Yes |
+| `GEMINI_API_KEY` | Recommended (or set once via dashboard / `wrangler secret`) |
+
+Also automate `npm run build` and `npm run lint` on every Pull Request if desired.
 
 ---
 

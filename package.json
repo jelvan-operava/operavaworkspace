@@ -11,7 +11,9 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:typegen": "wrangler types"
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:d1:local": "wrangler d1 execute operava-desk --local --file=./migrations/0001_init.sql",
+    "cf:d1:remote": "wrangler d1 execute operava-desk --remote --file=./migrations/0001_init.sql"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

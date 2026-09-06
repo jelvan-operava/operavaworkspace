@@ -1,5 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { getPortalEnv } from '@/lib/cloudflare';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +13,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const cf = await getPortalEnv();
+    const apiKey = process.env.GEMINI_API_KEY || cf?.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: 'GEMINI_API_KEY environment variable is missing on server.' },

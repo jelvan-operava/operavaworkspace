@@ -30,167 +30,105 @@ Omnichannel ticketing, CRM, invoicing, contracts, email blasting, file manager, 
                   Large files/videos
 ```
 
-| Layer | Role | Status in this repo |
+| Layer | Role | Status |
 | --- | --- | --- |
-| **Cloudflare** | Website, DNS, CDN, Workers (API + SSR), optional future D1/R2/KV | **Ready** — OpenNext → Cloudflare Workers |
-| **Supabase** | Database, Auth, Users, Tickets, Permissions, Realtime | **Not implemented** (data is mock + `localStorage`) |
-| **MEGA** | Large files / videos | **Not implemented** (File Manager is metadata mock only) |
-
-This build is a **frontend-complete demo** with Cloudflare Workers deployment and a production-ready Gemini API route. Real multi-user production requires Supabase (or equivalent) + real file storage (MEGA or R2).
+| **Cloudflare** | Website, CDN, Workers (SSR + API), D1, KV, R2 | **Implemented in code** — provision resources once (see below) |
+| **Supabase** | Auth, Users, RLS, Realtime (optional alternative to D1) | Not wired yet |
+| **MEGA** | Large files / videos (optional alternative to R2) | Not wired yet |
 
 ---
 
-## Quick start (local)
+## Cloudflare stack (implemented)
 
-```bash
-npm install
-cp .env.example .env.local   # set GEMINI_API_KEY
-npm run dev                  # http://localhost:3000
-```
-
-| Variable | Required | Notes |
+| Binding | Type | Use |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Yes | Server-only. Get from [Google AI Studio](https://aistudio.google.com/app/apikey). Never use `NEXT_PUBLIC_`. |
+| `ASSETS` | Assets | Static `/_next`, `sw.js` |
+| `PORTAL_KV` | KV | Portal JSON cache / sessions |
+| `PORTAL_DB` | D1 | `portal_docs`, `tickets`, `crm_leads`, `audit_logs`, `files` |
+| `PORTAL_FILES` | R2 | File bytes |
+| `GEMINI_API_KEY` | Secret | AI route |
 
----
+### API routes
 
-## Deploy to Cloudflare (Workers — recommended)
+| Route | Methods | Purpose |
+| --- | --- | --- |
+| `/api/health` | GET | Binding readiness + D1 ping |
+| `/api/portal` | GET, PUT | Full portal document (D1 + KV) |
+| `/api/tickets` | GET, POST | Tickets in D1 |
+| `/api/files` | GET, POST | List/upload (D1 metadata + R2 body) |
+| `/api/gemini/generate` | POST | Gemini assistant |
 
-This app uses **[@opennextjs/cloudflare](https://opennext.js.org/cloudflare)** and deploys as a **Cloudflare Worker** with static assets (not the legacy Pages-only Next path).
+Schema: `migrations/0001_init.sql`  
+Setup guide: [`scripts/cf-setup.md`](./scripts/cf-setup.md)
 
-In 2025–2026 Cloudflare recommends **Workers + static assets** for full-stack Next.js (App Router, Route Handlers, Node compat). Pages remains fine for pure static sites; this project is full-stack SSR/API, so **Workers is the correct target**.
-
-### One-time setup
-
-1. Cloudflare account + Wrangler login:
+### One-time provision + deploy
 
 ```bash
 npx wrangler login
-```
 
-2. Set the Gemini secret (production):
+# Create resources (copy IDs into wrangler.jsonc)
+npx wrangler kv namespace create PORTAL_KV
+npx wrangler kv namespace create PORTAL_KV --preview
+npx wrangler d1 create operava-desk
+npx wrangler r2 bucket create operava-desk-files
+npx wrangler r2 bucket create operava-desk-files-preview
 
-```bash
+# After pasting IDs into wrangler.jsonc:
+npm run cf:d1:remote
 npx wrangler secret put GEMINI_API_KEY
+npm run cf:deploy
+
+curl https://operava-desk.<account>.workers.dev/api/health
 ```
 
-   For local `wrangler` / preview, use a gitignored `.dev.vars`:
+Replace every `REPLACE_WITH_*` in `wrangler.jsonc` before production deploy.
 
-```bash
-echo 'GEMINI_API_KEY=your_key_here' > .dev.vars
-```
-
-### Build, preview, deploy
-
-```bash
-npm run cf:build      # OpenNext → Worker bundle
-npm run cf:preview    # Local Miniflare preview
-npm run cf:deploy     # Deploy to Cloudflare Workers
-```
-
-Equivalent:
-
-```bash
-npx opennextjs-cloudflare build
-npx opennextjs-cloudflare deploy
-```
-
-Config files:
-
-- `wrangler.jsonc` — Worker name (`operava-desk`), assets binding, optional future KV/D1/R2
-- `open-next.config.ts` — OpenNext Cloudflare preset (`buildCommand: npm run build`)
-
-After deploy, the Worker URL is printed by Wrangler (e.g. `https://operava-desk.<account>.workers.dev`). Attach a custom domain in the Cloudflare dashboard under **Workers & Pages → operava-desk → Triggers / Custom Domains**.
-
-### Optional bindings (future backend)
-
-Uncomment in `wrangler.jsonc` when you add real persistence:
-
-| Binding | Type | Purpose |
-| --- | --- | --- |
-| `PORTAL_KV` | KV | Sessions / cache |
-| `PORTAL_DB` | D1 | Relational data (or use Supabase instead) |
-| `PORTAL_FILES` | R2 | File uploads (or use MEGA instead) |
-
-### CI/CD (GitHub Actions)
-
-A workflow is provided at `.github/workflows/deploy-cloudflare.yml`.
-
-Repository secrets required for auto-deploy on push to `main`:
-
-| Secret | Description |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Token with Workers edit + Account read |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `GEMINI_API_KEY` | Set via `wrangler secret` in the job, or pre-set in the dashboard |
-
----
-
-## Why not “Cloudflare Pages” for this app?
-
-| | Cloudflare Pages | Cloudflare Workers (this repo) |
-| --- | --- | --- |
-| Best for | Static / simple Jamstack | Full-stack Next.js (SSR, API routes, Node APIs) |
-| OpenNext target | Legacy / not preferred | **Official path** |
-| Git previews | Built-in | Via Workers Builds / Actions |
-| Bindings (D1, R2, KV, secrets) | Yes | Yes, first-class |
-
-You can still put DNS and CDN on Cloudflare (Pages or Workers custom domains). The **application runtime** for this codebase is the Worker produced by OpenNext.
-
----
-
-## Project structure (high level)
-
-```
-app/                    # Next.js App Router (page hub, API routes)
-components/             # UI + feature views (15 modules)
-hooks/
-lib/                    # mock-data, offline-storage, m3-theme, utils
-public/                 # sw.js (service worker), static assets
-wrangler.jsonc          # Cloudflare Worker config
-open-next.config.ts     # OpenNext Cloudflare adapter
-Deployment.md           # Full feature + architecture guide
-```
-
-Feature views live under `components/views/` (Dashboard, CRM, Invoices, Support Tickets, File Manager, etc.). See **[Deployment.md](./Deployment.md)** for the complete module list and backend status table.
-
----
-
-## Scripts
+### Scripts
 
 | Script | Description |
 | --- | --- |
-| `npm run dev` | Local Next.js dev server |
-| `npm run build` / `npm start` | Standalone Node build |
-| `npm run lint` | ESLint |
-| `npm run cf:build` | OpenNext Cloudflare build |
-| `npm run cf:preview` | Build + local Worker preview |
-| `npm run cf:deploy` | Build + deploy to Cloudflare Workers |
-| `npm run cf:typegen` | `wrangler types` |
+| `npm run dev` | Local Next.js (no bindings → APIs return 503; UI uses localStorage) |
+| `npm run cf:build` / `cf:preview` / `cf:deploy` | OpenNext → Workers |
+| `npm run cf:d1:local` / `cf:d1:remote` | Apply D1 migration |
+| `npm run cf:typegen` | Regenerate Cloudflare env types |
 
 ---
 
-## Backend status (honest)
+## Quick start (local UI)
 
-| Concern | Current | Target |
-| --- | --- | --- |
-| Business data | `lib/mock-data.ts` + `localStorage` | Supabase (or D1) |
-| Auth / users / permissions | None | Supabase Auth + RLS |
-| Tickets / realtime | UI only | Supabase tables + Realtime |
-| Large files / videos | Mock metadata | MEGA (or R2) |
-| AI Assistant | **Production-ready** (server route + secret) | Keep as-is |
-
-Do **not** store real customer data until auth and a real database are wired.
+```bash
+npm install
+cp .env.example .env.local   # GEMINI_API_KEY
+npm run dev                  # http://localhost:3000
+```
 
 ---
 
-## Documentation
+## Why Workers (not Pages)
 
-- **[Deployment.md](./Deployment.md)** — Full feature list, design system, env vars, bindings, rollback
-- This **README** — Architecture diagram, quick start, Cloudflare Workers deploy, CI secrets
+Full-stack Next.js App Router + Route Handlers → **OpenNext → Cloudflare Workers** with static assets. Pages is for simpler static sites. DNS/CDN stay on Cloudflare either way.
+
+CI: `.github/workflows/deploy-cloudflare.yml` (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`).
 
 ---
 
-## License / about
+## Backend honesty
 
-Multi-themed Material Design 3 client portal for the Operava workspace.
+| Concern | Current |
+| --- | --- |
+| UI / 15 feature modules | Complete (demo data + localStorage offline) |
+| Cloudflare Workers deploy | Ready |
+| D1 / KV / R2 + APIs | **Implemented** — needs your account resource IDs |
+| Wire UI to `/api/portal` instead of only localStorage | Next step (optional) |
+| Supabase Auth / Realtime | Not yet |
+| MEGA | Not yet |
+
+Do not store real customer data until you have auth (Supabase or Cloudflare Access) in front of these APIs.
+
+---
+
+## Docs
+
+- [`scripts/cf-setup.md`](./scripts/cf-setup.md) — create KV, D1, R2, secrets
+- [`Deployment.md`](./Deployment.md) — features, design system, rollback
+- [`migrations/0001_init.sql`](./migrations/0001_init.sql) — D1 schema
